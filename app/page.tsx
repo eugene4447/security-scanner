@@ -41,7 +41,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white p-8 flex flex-col items-center">
-      <h1 className="text-4xl font-bold mb-8 text-blue-400">Security Scanner</h1>
+      <h1 className="text-4xl font-bold mb-8 text-blue-400">GitHub Repository Security Scanner</h1>
       
       <div className="w-full max-w-lg bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl">
         <input 

@@ -5,8 +5,17 @@ export default function Home() {
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCheck = async () => {
+    // Клиентская валидация
+    const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+(\/.*)?$/;
+    if (!repoRegex.test(repoUrl)) {
+      setError("Invalid GitHub URL. Please use: https://github.com/user/repo");
+      return;
+    }
+
+    setError(null);
     setLoading(true);
     try {
       const res = await fetch('/api/analyze', {
@@ -14,9 +23,12 @@ export default function Home() {
         body: JSON.stringify({ repoUrl }),
       });
       const data = await res.json();
+      
+      if (!res.ok) throw new Error(data.error || "Analysis failed");
+      
       setResult(data);
-    } catch (e) {
-      alert("Error occurred");
+    } catch (e: any) {
+      setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -29,42 +41,43 @@ export default function Home() {
       <div className="w-full max-w-lg bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl">
         <input 
           className="w-full bg-slate-800 p-4 rounded-xl mb-4 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="GitHub URL"
+          placeholder="https://github.com/user/repo"
+          value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
         />
+        {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
         <button 
           onClick={handleCheck}
-          className="w-full bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-bold transition"
+          disabled={loading}
+          className="w-full bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-bold transition disabled:opacity-50"
         >
-          {loading ? "Scanning..." : "Check Security"}
+          {loading ? "Scanning with AI..." : "Check Security"}
         </button>
       </div>
 
       {result && (
-        <div className="mt-8 p-6 bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg">
+        <div className="mt-8 p-6 bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg animate-in fade-in duration-500">
           {result.alreadyExists ? (
             <div className="text-center">
               <p className="text-yellow-400 font-bold mb-4">Already scanned!</p>
-              <a 
-                href={`https://basescan.org/address/0xF4D17D4CC737a3B5E544bcFB7FF782946Affa8D2`} 
-                target="_blank"
-                className="text-blue-400 underline"
-              >
+              <a href={`https://basescan.org/address/0xF4D17D4CC737a3B5E544bcFB7FF782946Affa8D2`} target="_blank" className="text-blue-400 underline">
                 View all reports on BaseScan
               </a>
             </div>
           ) : (
             <div>
-              {/* Исправленная строка здесь: */}
-              <p className="text-xl font-bold text-white mb-2">Score: {result.score} / 100</p>
+              <p className="text-2xl font-bold text-white mb-2">Score: {result.score} / 100</p>
               
-              <p className="mt-2 text-sm text-slate-300">{result.verdict}</p>
-              <a 
-                href={`https://basescan.org/tx/${result.txHash}`} 
-                target="_blank"
-                className="mt-4 block text-blue-400 underline"
-              >
-                View Transaction
+              <div className="mt-4 space-y-3">
+                <p className="font-semibold text-blue-300">Summary: {result.verdict}</p>
+                <div className="bg-slate-800 p-4 rounded-lg">
+                  <p className="text-sm text-slate-400 font-bold mb-1">Why this score:</p>
+                  <p className="text-sm text-slate-200">{result.rationale}</p>
+                </div>
+              </div>
+
+              <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="mt-6 block text-blue-400 underline hover:text-blue-300 transition">
+                View Transaction on BaseScan
               </a>
             </div>
           )}

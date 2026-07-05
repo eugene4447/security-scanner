@@ -14,6 +14,17 @@ const ABI = parseAbi([
 export async function POST(req: Request) {
   try {
     const { repoUrl } = await req.json();
+
+    // 0. ВАЛИДАЦИЯ ССЫЛКИ
+    // Регулярное выражение: проверяет, что это github.com + user + repo
+    const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+(\/.*)?$/;
+    if (!repoUrl || !repoRegex.test(repoUrl)) {
+      return NextResponse.json(
+        { error: "Invalid GitHub URL. Use format: https://github.com/user/repo" }, 
+        { status: 400 }
+      );
+    }
+
     const publicClient = createPublicClient({ chain: base, transport: http() });
 
     // 1. ПРОВЕРКА: существует ли уже отчет?
@@ -27,19 +38,35 @@ export async function POST(req: Request) {
     if (reportExists) {
       return NextResponse.json({ 
         alreadyExists: true,
-        message: "Этот репозиторий уже был проверен ранее."
+        message: "This repository has already been scanned."
       });
     }
 
-    // 2. АНАЛИЗ (если отчета нет)
+    // 2. АНАЛИЗ
     const chatCompletion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: `Analyze security of: ${repoUrl}. Give format exactly: "Score: [0-100], Verdict: [Short text]"` }],
+      messages: [{ 
+        role: "user", 
+        content: `Analyze security of: ${repoUrl}. 
+        Return ONLY in this format: 
+        Score: [0-100]
+        Verdict: [Short professional summary under 50 chars]` 
+      }],
       model: "llama-3.3-70b-versatile",
     });
 
     const aiText = chatCompletion.choices[0]?.message?.content || "";
-    const score = parseInt(aiText.match(/Score: (\d+)/)?.[1] || "0");
-    const verdict = aiText.match(/Verdict: (.+)/)?.[1] || "Unknown";
+    
+    // Парсинг с очисткой
+    const scoreMatch = aiText.match(/Score: (\d+)/);
+    const verdictMatch = aiText.match(/Verdict: (.+)/);
+    
+    const score = parseInt(scoreMatch?.[1] || "0");
+    const verdict = (verdictMatch?.[1] || "Unknown").trim().substring(0, 50);
+
+    // Защита от ошибок нейросети
+    if (score === 0 && verdict === "Unknown") {
+      throw new Error("AI analysis failed to produce a valid score.");
+    }
 
     // 3. ЗАПИСЬ
     const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);

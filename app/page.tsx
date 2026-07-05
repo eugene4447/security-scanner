@@ -17,9 +17,12 @@ export default function Home() {
 
     setError(null);
     setLoading(true);
+    setResult(null); // Сброс предыдущего результата при новом поиске
+
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoUrl }),
       });
       const data = await res.json();
@@ -76,9 +79,22 @@ export default function Home() {
                 </div>
               </div>
 
-              <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="mt-6 block text-blue-400 underline hover:text-blue-300 transition">
-                View Transaction on BaseScan
-              </a>
+              {/* Ссылка на транзакцию и инструкция */}
+              <div className="mt-6">
+                <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="block text-blue-400 underline hover:text-blue-300 transition font-bold">
+                  View Transaction on BaseScan
+                </a>
+                
+                <div className="mt-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
+                  <p className="text-sm font-bold text-blue-400 mb-2">How to verify on-chain:</p>
+                  <ol className="text-xs text-slate-400 list-decimal list-inside space-y-1">
+                    <li>Click <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="underline text-blue-300">View Transaction</a>.</li>
+                    <li>Scroll down to <span className="text-white font-medium">"Input Data"</span>.</li>
+                    <li>Click the dropdown menu and select <span className="text-white font-medium">"UTF-8"</span>.</li>
+                    <li>Scroll right to see the full audit report.</li>
+                  </ol>
+                </div>
+              </div>
             </div>
           )}
         </div>

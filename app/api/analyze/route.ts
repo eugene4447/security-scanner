@@ -16,7 +16,6 @@ export async function POST(req: Request) {
     const { repoUrl } = await req.json();
 
     // 0. ВАЛИДАЦИЯ ССЫЛКИ
-    // Регулярное выражение: проверяет, что это github.com + user + repo
     const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+(\/.*)?$/;
     if (!repoUrl || !repoRegex.test(repoUrl)) {
       return NextResponse.json(
@@ -27,7 +26,7 @@ export async function POST(req: Request) {
 
     const publicClient = createPublicClient({ chain: base, transport: http() });
 
-    // 1. ПРОВЕРКА: существует ли уже отчет?
+    // 1. ПРОВЕРКА
     const reportExists = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
       abi: ABI,
@@ -36,36 +35,38 @@ export async function POST(req: Request) {
     });
 
     if (reportExists) {
-      return NextResponse.json({ 
-        alreadyExists: true,
-        message: "This repository has already been scanned."
-      });
+      return NextResponse.json({ alreadyExists: true, message: "This repository has already been scanned." });
     }
 
-    // 2. АНАЛИЗ
+    // 2. АНАЛИЗ (Вариант Б: просим Verdict + Rationale)
     const chatCompletion = await groq.chat.completions.create({
       messages: [{ 
         role: "user", 
         content: `Analyze security of: ${repoUrl}. 
-        Return ONLY in this format: 
+        Return ONLY in this format:
         Score: [0-100]
-        Verdict: [Short professional summary under 50 chars]` 
+        Verdict: [Short summary]
+        Rationale: [Detailed reason for this score]` 
       }],
       model: "llama-3.3-70b-versatile",
     });
 
     const aiText = chatCompletion.choices[0]?.message?.content || "";
     
-    // Парсинг с очисткой
+    // Парсинг
     const scoreMatch = aiText.match(/Score: (\d+)/);
     const verdictMatch = aiText.match(/Verdict: (.+)/);
+    const rationaleMatch = aiText.match(/Rationale: (.+)/);
     
     const score = parseInt(scoreMatch?.[1] || "0");
-    const verdict = (verdictMatch?.[1] || "Unknown").trim().substring(0, 50);
+    const baseVerdict = (verdictMatch?.[1] || "Unknown").trim();
+    const rationale = (rationaleMatch?.[1] || "No details provided").trim();
+    
+    // Объединяем в одну строку для блокчейна
+    const fullVerdict = `${baseVerdict} | ${rationale}`.substring(0, 150);
 
-    // Защита от ошибок нейросети
-    if (score === 0 && verdict === "Unknown") {
-      throw new Error("AI analysis failed to produce a valid score.");
+    if (score === 0 && baseVerdict === "Unknown") {
+      throw new Error("AI analysis failed.");
     }
 
     // 3. ЗАПИСЬ
@@ -76,12 +77,19 @@ export async function POST(req: Request) {
       address: CONTRACT_ADDRESS,
       abi: ABI,
       functionName: 'recordReport',
-      args: [repoUrl, score, verdict]
+      args: [repoUrl, score, fullVerdict] // fullVerdict содержит и summary, и rationale
     });
 
     const txHash = await walletClient.writeContract(request);
 
-    return NextResponse.json({ score, verdict, txHash, alreadyExists: false });
+    // Возвращаем фронтенду раздельно для красивого вывода
+    return NextResponse.json({ 
+      score, 
+      verdict: baseVerdict, 
+      rationale: rationale, 
+      txHash, 
+      alreadyExists: false 
+    });
 
   } catch (error: any) {
     console.error("DEBUG_ERROR:", error); 

@@ -8,8 +8,10 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const handleCheck = async () => {
+    // 1. Защита от спама (Debounce-эффект)
+    if (loading) return; 
+
     // СТРОГАЯ КЛИЕНТСКАЯ ВАЛИДАЦИЯ
-    // Разрешаем только формат github.com/user/repo
     const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+$/;
     
     if (!repoRegex.test(repoUrl)) {

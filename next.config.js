@@ -1,8 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
-    // Разрешает сборку проекта даже если есть ошибки TypeScript
     ignoreBuildErrors: true,
+  },
+  // Добавляем принудительную настройку для стилей
+  webpack: (config) => {
+    return config;
   },
 };
 

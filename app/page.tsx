@@ -2,42 +2,67 @@
 import { useState } from 'react';
 
 export default function Home() {
-  const [url, setUrl] = useState('');
+  const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState('');
 
-  const analyze = async () => {
+  const handleCheck = async () => {
     setLoading(true);
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      body: JSON.stringify({ repoUrl: url }),
-    });
-    const data = await res.json();
-    setResult(data);
-    setLoading(false);
+    setError('');
+    setResult(null);
+
+    try {
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ repoUrl }),
+      });
+      const data = await response.json();
+
+      if (response.ok) {
+        setResult(data);
+      } else {
+        setError(data.message || data.error || "Произошла ошибка");
+      }
+    } catch (err) {
+      setError("Ошибка соединения с сервером");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <main style={{ padding: '50px', fontFamily: 'sans-serif' }}>
       <h1>Security Scanner</h1>
+      
       <input 
-        value={url} 
-        onChange={(e) => setUrl(e.target.value)} 
+        value={repoUrl} 
+        onChange={(e) => setRepoUrl(e.target.value)}
         placeholder="Ссылка на GitHub репозиторий"
-        style={{ width: '300px', padding: '10px' }}
+        style={{ padding: '10px', width: '300px' }}
       />
-      <button onClick={analyze} disabled={loading} style={{ padding: '10px' }}>
-        {loading ? 'Анализ...' : 'Проверить'}
+      <button onClick={handleCheck} disabled={loading} style={{ padding: '10px', marginLeft: '10px' }}>
+        {loading ? "Анализ..." : "Проверить"}
       </button>
+
+      {error && <p style={{ color: 'red', marginTop: '20px' }}>{error}</p>}
 
       {result && (
         <div style={{ marginTop: '20px' }}>
-          <p>Оценка: {result.score}</p>
-          <p>Вердикт: {result.verdict}</p>
-          {result.txHash && (
-            <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank">
-              Посмотреть транзакцию в BaseScan
-            </a>
+          {result.alreadyExists ? (
+            <p>✅ {result.message}</p>
+          ) : (
+            <>
+              <p><strong>Оценка:</strong> {result.score}</p>
+              <p><strong>Вердикт:</strong> {result.verdict}</p>
+              <a 
+                href={`https://basescan.org/tx/${result.txHash}`} 
+                target="_blank" 
+                rel="noreferrer"
+              >
+                Посмотреть транзакцию в BaseScan
+              </a>
+            </>
           )}
         </div>
       )}

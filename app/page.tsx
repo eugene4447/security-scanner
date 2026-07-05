@@ -11,12 +11,11 @@ export default function Home() {
     // 1. Защита от спама (Debounce-эффект)
     if (loading) return; 
 
-    // СТРОГАЯ КЛИЕНТСКАЯ ВАЛИДАЦИЯ
+    // 2. СТРОГАЯ КЛИЕНТСКАЯ ВАЛИДАЦИЯ
     const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+$/;
-    
     if (!repoRegex.test(repoUrl)) {
-      setError("Invalid format. Please use: https://github.com/user/repo (no commits or files)");
-      return;
+      setError("Invalid format. Please use: https://github.com/user/repo");
+      return; // Обязательный возврат, чтобы не отправлять запрос
     }
 
     setError(null);
@@ -29,9 +28,13 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repoUrl }),
       });
+      
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.error || "Analysis failed");
+      // Обработка ошибок сервера
+      if (!res.ok) {
+        throw new Error(data.error || "Analysis failed");
+      }
       
       setResult(data);
     } catch (e: any) {
@@ -51,6 +54,7 @@ export default function Home() {
           placeholder="https://github.com/user/repo"
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
+          disabled={loading}
         />
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
         <button 
@@ -83,21 +87,23 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="mt-6">
-                <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="block text-blue-400 underline hover:text-blue-300 transition font-bold">
-                  View Transaction on BaseScan
-                </a>
-                
-                <div className="mt-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
-                  <p className="text-sm font-bold text-blue-400 mb-2">How to verify on-chain:</p>
-                  <ol className="text-xs text-slate-400 list-decimal list-inside space-y-1">
-                    <li>Click <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="underline text-blue-300">View Transaction</a>.</li>
-                    <li>Scroll down to <span className="text-white font-medium">"Input Data"</span>.</li>
-                    <li>Click the dropdown menu and select <span className="text-white font-medium">"UTF-8"</span>.</li>
-                    <li>Scroll right to see the full audit report.</li>
-                  </ol>
+              {result.txHash && (
+                <div className="mt-6">
+                  <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="block text-blue-400 underline hover:text-blue-300 transition font-bold">
+                    View Transaction on BaseScan
+                  </a>
+                  
+                  <div className="mt-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
+                    <p className="text-sm font-bold text-blue-400 mb-2">How to verify on-chain:</p>
+                    <ol className="text-xs text-slate-400 list-decimal list-inside space-y-1">
+                      <li>Click <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="underline text-blue-300">View Transaction</a>.</li>
+                      <li>Scroll down to <span className="text-white font-medium">"Input Data"</span>.</li>
+                      <li>Click the dropdown menu and select <span className="text-white font-medium">"UTF-8"</span>.</li>
+                      <li>Scroll right to see the full audit report.</li>
+                    </ol>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

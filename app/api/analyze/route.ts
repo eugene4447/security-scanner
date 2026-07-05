@@ -11,7 +11,6 @@ const ABI = parseAbi([
   'function hasReport(string _repoUrl) public view returns (bool)'
 ]);
 
-// Используем ваш персональный RPC-ключ из переменной окружения Vercel
 const rpcUrl = process.env.BASE_RPC_URL;
 const publicClient = createPublicClient({ 
   chain: base, 
@@ -22,7 +21,6 @@ export async function POST(req: Request) {
   try {
     const { repoUrl } = await req.json();
 
-    // 0. СТРОГАЯ ВАЛИДАЦИЯ ССЫЛКИ
     const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+$/;
     if (!repoUrl || !repoRegex.test(repoUrl)) {
       return NextResponse.json(
@@ -31,7 +29,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. ПРОВЕРКА: существует ли уже отчет?
     const reportExists = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
       abi: ABI,
@@ -40,13 +37,9 @@ export async function POST(req: Request) {
     });
 
     if (reportExists) {
-      return NextResponse.json({ 
-        alreadyExists: true, 
-        message: "This repository has already been scanned." 
-      });
+      return NextResponse.json({ alreadyExists: true, message: "This repository has already been scanned." });
     }
 
-    // 2. АНАЛИЗ
     const chatCompletion = await groq.chat.completions.create({
       messages: [{ 
         role: "user", 
@@ -54,7 +47,7 @@ export async function POST(req: Request) {
         Return ONLY in this format:
         Score: [0-100]
         Verdict: [Short summary]
-        Rationale: [Detailed reason for this score]` 
+        Rationale: [Detailed security analysis in under 800 characters]` 
       }],
       model: "llama-3.3-70b-versatile",
     });
@@ -67,13 +60,18 @@ export async function POST(req: Request) {
     const score = parseInt(scoreMatch?.[1] || "0");
     const baseVerdict = (verdictMatch?.[1] || "Unknown").trim();
     const rationale = (rationaleMatch?.[1] || "No details provided").trim();
-    const fullVerdict = `${baseVerdict} | ${rationale}`.substring(0, 150);
+    
+    // Формируем отчет с лимитом 1000 символов и умной обрезкой
+    let fullVerdict = `${baseVerdict} | ${rationale}`;
+    if (fullVerdict.length > 1000) {
+      fullVerdict = fullVerdict.substring(0, 1000);
+      fullVerdict = fullVerdict.substring(0, Math.min(fullVerdict.length, fullVerdict.lastIndexOf(" "))) + "...";
+    }
 
     if (score === 0 && baseVerdict === "Unknown") {
       throw new Error("AI analysis failed.");
     }
 
-    // 3. ЗАПИСЬ
     const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
     const walletClient = createWalletClient({ 
       account, 
@@ -90,20 +88,11 @@ export async function POST(req: Request) {
 
     const txHash = await walletClient.writeContract(request);
 
-    return NextResponse.json({ 
-      score, 
-      verdict: baseVerdict, 
-      rationale, 
-      txHash, 
-      alreadyExists: false 
-    });
+    return NextResponse.json({ score, verdict: baseVerdict, rationale, txHash, alreadyExists: false });
 
   } catch (error: any) {
     console.error("DEBUG_ERROR:", error);
-    
-    // Обработка лимитов RPC
     const isRateLimit = error.details?.includes("rate limit") || error.message?.includes("rate limit");
-    
     return NextResponse.json(
       { error: isRateLimit ? "RPC limit exceeded. Please try again in 5 seconds." : error.message }, 
       { status: isRateLimit ? 429 : 500 }

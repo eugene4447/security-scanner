@@ -55,7 +55,9 @@ export default function Home() {
             </div>
           ) : (
             <div>
-              <p>Score: {result.score}</p>
+              {/* Исправленная строка здесь: */}
+              <p className="text-xl font-bold text-white mb-2">Score: {result.score} / 100</p>
+              
               <p className="mt-2 text-sm text-slate-300">{result.verdict}</p>
               <a 
                 href={`https://basescan.org/tx/${result.txHash}`} 
@@ -71,4 +73,3 @@ export default function Home() {
     </div>
   );
 }
-// trigger rebuild

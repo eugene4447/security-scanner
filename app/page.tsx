@@ -5,67 +5,69 @@ export default function Home() {
   const [repoUrl, setRepoUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState('');
 
   const handleCheck = async () => {
     setLoading(true);
-    setError('');
-    setResult(null);
-
     try {
-      const response = await fetch('/api/analyze', {
+      const res = await fetch('/api/analyze', {
         method: 'POST',
         body: JSON.stringify({ repoUrl }),
       });
-      const data = await response.json();
-
-      if (response.ok) {
-        setResult(data);
-      } else {
-        setError(data.message || data.error || "An error occurred");
-      }
-    } catch (err) {
-      setError("Connection error");
+      const data = await res.json();
+      setResult(data);
+    } catch (e) {
+      alert("Error occurred");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main style={{ padding: '50px', fontFamily: 'sans-serif' }}>
-      <h1>Security Scanner</h1>
+    <div className="min-h-screen bg-slate-950 text-white p-8 flex flex-col items-center">
+      <h1 className="text-4xl font-bold mb-8 text-blue-400">Security Scanner</h1>
       
-      <input 
-        value={repoUrl} 
-        onChange={(e) => setRepoUrl(e.target.value)}
-        placeholder="Enter GitHub repository URL"
-        style={{ padding: '10px', width: '300px' }}
-      />
-      <button onClick={handleCheck} disabled={loading} style={{ padding: '10px', marginLeft: '10px' }}>
-        {loading ? "Analyzing..." : "Check"}
-      </button>
-
-      {error && <p style={{ color: 'red', marginTop: '20px' }}>{error}</p>}
+      <div className="w-full max-w-lg bg-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl">
+        <input 
+          className="w-full bg-slate-800 p-4 rounded-xl mb-4 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="GitHub URL"
+          onChange={(e) => setRepoUrl(e.target.value)}
+        />
+        <button 
+          onClick={handleCheck}
+          className="w-full bg-blue-600 hover:bg-blue-500 p-4 rounded-xl font-bold transition"
+        >
+          {loading ? "Scanning..." : "Check Security"}
+        </button>
+      </div>
 
       {result && (
-        <div style={{ marginTop: '20px' }}>
+        <div className="mt-8 p-6 bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg">
           {result.alreadyExists ? (
-            <p>✅ This repository has already been scanned.</p>
+            <div className="text-center">
+              <p className="text-yellow-400 font-bold mb-4">Already scanned!</p>
+              <a 
+                href={`https://basescan.org/address/0xF4D17D4CC737a3B5E544bcFB7FF782946Affa8D2`} 
+                target="_blank"
+                className="text-blue-400 underline"
+              >
+                View all reports on BaseScan
+              </a>
+            </div>
           ) : (
-            <>
-              <p><strong>Score:</strong> {result.score}</p>
-              <p><strong>Verdict:</strong> {result.verdict}</p>
+            <div>
+              <p>Score: {result.score}</p>
+              <p className="mt-2 text-sm text-slate-300">{result.verdict}</p>
               <a 
                 href={`https://basescan.org/tx/${result.txHash}`} 
-                target="_blank" 
-                rel="noreferrer"
+                target="_blank"
+                className="mt-4 block text-blue-400 underline"
               >
-                View transaction on BaseScan
+                View Transaction
               </a>
-            </>
+            </div>
           )}
         </div>
       )}
-    </main>
+    </div>
   );
 }

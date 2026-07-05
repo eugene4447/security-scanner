@@ -22,18 +22,17 @@ export async function POST(req: Request) {
 
     const publicClient = createPublicClient({ chain: base, transport: http() });
     
-    // Создаем аккаунт (ключ ОБЯЗАТЕЛЬНО должен начинаться с 0x)
+    // Создаем аккаунт
     const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
     const walletClient = createWalletClient({ account, chain: base, transport: http() });
 
-    // AI Анализ
+    // AI Анализ с обновленной моделью
     const chatCompletion = await groq.chat.completions.create({
       messages: [{ role: "user", content: `Analyze security of: ${repoUrl}. Give format exactly: "Score: [0-100], Verdict: [Short text]"` }],
-      model: "llama3-70b-8192",
+      model: "llama-3.3-70b-versatile",
     });
 
     const aiText = chatCompletion.choices[0]?.message?.content || "";
-    // Простейший парсинг ответа
     const score = parseInt(aiText.match(/Score: (\d+)/)?.[1] || "0");
     const verdict = aiText.match(/Verdict: (.+)/)?.[1] || "Unknown";
 
@@ -50,7 +49,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ score, verdict, txHash });
 
   } catch (error: any) {
-    // ВАЖНО: Это выведет реальную ошибку в логи Vercel
+    // Вывод ошибки в логи Vercel для диагностики
     console.log("=== ТУТ ОШИБКА ===");
     console.error(error); 
     

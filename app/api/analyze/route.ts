@@ -15,18 +15,19 @@ export async function POST(req: Request) {
   try {
     const { repoUrl } = await req.json();
 
-    // 0. ВАЛИДАЦИЯ ССЫЛКИ
-    const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+(\/.*)?$/;
+    // 0. СТРОГАЯ ВАЛИДАЦИЯ ССЫЛКИ
+    // Разрешаем только формат github.com/user/repo
+    const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+$/;
     if (!repoUrl || !repoRegex.test(repoUrl)) {
       return NextResponse.json(
-        { error: "Invalid GitHub URL. Use format: https://github.com/user/repo" }, 
+        { error: "Invalid format. Please provide only the main repository URL (e.g., https://github.com/user/repo)" }, 
         { status: 400 }
       );
     }
 
     const publicClient = createPublicClient({ chain: base, transport: http() });
 
-    // 1. ПРОВЕРКА
+    // 1. ПРОВЕРКА: существует ли уже отчет?
     const reportExists = await publicClient.readContract({
       address: CONTRACT_ADDRESS,
       abi: ABI,
@@ -35,14 +36,17 @@ export async function POST(req: Request) {
     });
 
     if (reportExists) {
-      return NextResponse.json({ alreadyExists: true, message: "This repository has already been scanned." });
+      return NextResponse.json({ 
+        alreadyExists: true, 
+        message: "This repository has already been scanned." 
+      });
     }
 
-    // 2. АНАЛИЗ (Вариант Б: просим Verdict + Rationale)
+    // 2. АНАЛИЗ
     const chatCompletion = await groq.chat.completions.create({
       messages: [{ 
         role: "user", 
-        content: `Analyze security of: ${repoUrl}. 
+        content: `Analyze the security of the GitHub repository: ${repoUrl}. 
         Return ONLY in this format:
         Score: [0-100]
         Verdict: [Short summary]
@@ -66,7 +70,7 @@ export async function POST(req: Request) {
     const fullVerdict = `${baseVerdict} | ${rationale}`.substring(0, 150);
 
     if (score === 0 && baseVerdict === "Unknown") {
-      throw new Error("AI analysis failed.");
+      throw new Error("AI analysis failed to produce a valid score.");
     }
 
     // 3. ЗАПИСЬ
@@ -77,12 +81,11 @@ export async function POST(req: Request) {
       address: CONTRACT_ADDRESS,
       abi: ABI,
       functionName: 'recordReport',
-      args: [repoUrl, score, fullVerdict] // fullVerdict содержит и summary, и rationale
+      args: [repoUrl, score, fullVerdict] 
     });
 
     const txHash = await walletClient.writeContract(request);
 
-    // Возвращаем фронтенду раздельно для красивого вывода
     return NextResponse.json({ 
       score, 
       verdict: baseVerdict, 

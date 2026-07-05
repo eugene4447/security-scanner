@@ -8,16 +8,18 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   const handleCheck = async () => {
-    // Клиентская валидация
-    const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+(\/.*)?$/;
+    // СТРОГАЯ КЛИЕНТСКАЯ ВАЛИДАЦИЯ
+    // Разрешаем только формат github.com/user/repo
+    const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+$/;
+    
     if (!repoRegex.test(repoUrl)) {
-      setError("Invalid GitHub URL. Please use: https://github.com/user/repo");
+      setError("Invalid format. Please use: https://github.com/user/repo (no commits or files)");
       return;
     }
 
     setError(null);
     setLoading(true);
-    setResult(null); // Сброс предыдущего результата при новом поиске
+    setResult(null); 
 
     try {
       const res = await fetch('/api/analyze', {
@@ -79,7 +81,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Ссылка на транзакцию и инструкция */}
               <div className="mt-6">
                 <a href={`https://basescan.org/tx/${result.txHash}`} target="_blank" className="block text-blue-400 underline hover:text-blue-300 transition font-bold">
                   View Transaction on BaseScan

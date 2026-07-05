@@ -22,10 +22,10 @@ export default function Home() {
       if (response.ok) {
         setResult(data);
       } else {
-        setError(data.message || data.error || "Произошла ошибка");
+        setError(data.message || data.error || "An error occurred");
       }
     } catch (err) {
-      setError("Ошибка соединения с сервером");
+      setError("Connection error");
     } finally {
       setLoading(false);
     }
@@ -38,11 +38,11 @@ export default function Home() {
       <input 
         value={repoUrl} 
         onChange={(e) => setRepoUrl(e.target.value)}
-        placeholder="Ссылка на GitHub репозиторий"
+        placeholder="Enter GitHub repository URL"
         style={{ padding: '10px', width: '300px' }}
       />
       <button onClick={handleCheck} disabled={loading} style={{ padding: '10px', marginLeft: '10px' }}>
-        {loading ? "Анализ..." : "Проверить"}
+        {loading ? "Analyzing..." : "Check"}
       </button>
 
       {error && <p style={{ color: 'red', marginTop: '20px' }}>{error}</p>}
@@ -50,17 +50,17 @@ export default function Home() {
       {result && (
         <div style={{ marginTop: '20px' }}>
           {result.alreadyExists ? (
-            <p>✅ {result.message}</p>
+            <p>✅ This repository has already been scanned.</p>
           ) : (
             <>
-              <p><strong>Оценка:</strong> {result.score}</p>
-              <p><strong>Вердикт:</strong> {result.verdict}</p>
+              <p><strong>Score:</strong> {result.score}</p>
+              <p><strong>Verdict:</strong> {result.verdict}</p>
               <a 
                 href={`https://basescan.org/tx/${result.txHash}`} 
                 target="_blank" 
                 rel="noreferrer"
               >
-                Посмотреть транзакцию в BaseScan
+                View transaction on BaseScan
               </a>
             </>
           )}

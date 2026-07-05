@@ -4,8 +4,8 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { base } from 'viem/chains';
 import { Groq } from 'groq-sdk';
 
+// Инициализация клиентов
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-
 const CONTRACT_ADDRESS = '0xF4D17D4CC737a3B5E544bcFB7FF782946Affa8D2';
 const ABI = parseAbi([
   'function recordReport(string _repoUrl, uint8 _score, string _verdict) public',
@@ -15,37 +15,47 @@ const ABI = parseAbi([
 export async function POST(req: Request) {
   try {
     const { repoUrl } = await req.json();
+    
+    // Проверки переменных окружения
+    if (!process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY не задан в Vercel");
+    if (!process.env.GROQ_API_KEY) throw new Error("GROQ_API_KEY не задан в Vercel");
 
     const publicClient = createPublicClient({ chain: base, transport: http() });
+    
+    // Создаем аккаунт (ключ ОБЯЗАТЕЛЬНО должен начинаться с 0x)
     const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
     const walletClient = createWalletClient({ account, chain: base, transport: http() });
 
-    // Проверка, есть ли уже отчет
-    const exists = await publicClient.readContract({
-      address: CONTRACT_ADDRESS, abi: ABI, functionName: 'hasReport', args: [repoUrl]
-    });
-
-    if (exists) return NextResponse.json({ error: "Report already exists" }, { status: 400 });
-
-    // Запрос к AI (Groq)
+    // AI Анализ
     const chatCompletion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: `Analyze the security of: ${repoUrl}. Score 0-100, Verdict: short text. Format: "Score: X, Verdict: Y"` }],
+      messages: [{ role: "user", content: `Analyze security of: ${repoUrl}. Give format exactly: "Score: [0-100], Verdict: [Short text]"` }],
       model: "llama3-70b-8192",
     });
 
     const aiText = chatCompletion.choices[0]?.message?.content || "";
+    // Простейший парсинг ответа
     const score = parseInt(aiText.match(/Score: (\d+)/)?.[1] || "0");
-    const verdict = aiText.split("Verdict:")[1]?.trim() || "Safe";
+    const verdict = aiText.match(/Verdict: (.+)/)?.[1] || "Unknown";
 
     // Запись в блокчейн
     const { request } = await publicClient.simulateContract({
-      address: CONTRACT_ADDRESS, abi: ABI, functionName: 'recordReport', args: [repoUrl, score as any, verdict]
+      address: CONTRACT_ADDRESS,
+      abi: ABI,
+      functionName: 'recordReport',
+      args: [repoUrl, score, verdict]
     });
-    
+
     const txHash = await walletClient.writeContract(request);
 
     return NextResponse.json({ score, verdict, txHash });
-  } catch (error) {
-    return NextResponse.json({ error: String(error) }, { status: 500 });
+
+  } catch (error: any) {
+    // ВАЖНО: Это выведет реальную ошибку в логи Vercel
+    console.log("=== ТУТ ОШИБКА ===");
+    console.error(error); 
+    
+    return NextResponse.json({ 
+      error: error.shortMessage || error.message || String(error) 
+    }, { status: 500 });
   }
 }

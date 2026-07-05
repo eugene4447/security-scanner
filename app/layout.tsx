@@ -1,4 +1,4 @@
-import './globals.css'; // Добавляем эту строку!
+import './globals.css'; // ДОБАВЬТЕ ЭТУ СТРОКУ
 
 export default function RootLayout({
   children,
@@ -6,7 +6,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="ru">
       <body>{children}</body>
     </html>
   );

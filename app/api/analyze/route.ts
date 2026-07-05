@@ -11,21 +11,25 @@ const ABI = parseAbi([
   'function hasReport(string _repoUrl) public view returns (bool)'
 ]);
 
+// Используем ваш персональный RPC-ключ из переменной окружения Vercel
+const rpcUrl = process.env.BASE_RPC_URL;
+const publicClient = createPublicClient({ 
+  chain: base, 
+  transport: http(rpcUrl) 
+});
+
 export async function POST(req: Request) {
   try {
     const { repoUrl } = await req.json();
 
     // 0. СТРОГАЯ ВАЛИДАЦИЯ ССЫЛКИ
-    // Разрешаем только формат github.com/user/repo
     const repoRegex = /^https:\/\/github\.com\/[^\/]+\/[^\/]+$/;
     if (!repoUrl || !repoRegex.test(repoUrl)) {
       return NextResponse.json(
-        { error: "Invalid format. Please provide only the main repository URL (e.g., https://github.com/user/repo)" }, 
+        { error: "Invalid format. Use https://github.com/user/repo" }, 
         { status: 400 }
       );
     }
-
-    const publicClient = createPublicClient({ chain: base, transport: http() });
 
     // 1. ПРОВЕРКА: существует ли уже отчет?
     const reportExists = await publicClient.readContract({
@@ -56,8 +60,6 @@ export async function POST(req: Request) {
     });
 
     const aiText = chatCompletion.choices[0]?.message?.content || "";
-    
-    // Парсинг
     const scoreMatch = aiText.match(/Score: (\d+)/);
     const verdictMatch = aiText.match(/Verdict: (.+)/);
     const rationaleMatch = aiText.match(/Rationale: (.+)/);
@@ -65,17 +67,19 @@ export async function POST(req: Request) {
     const score = parseInt(scoreMatch?.[1] || "0");
     const baseVerdict = (verdictMatch?.[1] || "Unknown").trim();
     const rationale = (rationaleMatch?.[1] || "No details provided").trim();
-    
-    // Объединяем в одну строку для блокчейна
     const fullVerdict = `${baseVerdict} | ${rationale}`.substring(0, 150);
 
     if (score === 0 && baseVerdict === "Unknown") {
-      throw new Error("AI analysis failed to produce a valid score.");
+      throw new Error("AI analysis failed.");
     }
 
     // 3. ЗАПИСЬ
     const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
-    const walletClient = createWalletClient({ account, chain: base, transport: http() });
+    const walletClient = createWalletClient({ 
+      account, 
+      chain: base, 
+      transport: http(rpcUrl) 
+    });
 
     const { request } = await publicClient.simulateContract({
       address: CONTRACT_ADDRESS,
@@ -89,13 +93,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ 
       score, 
       verdict: baseVerdict, 
-      rationale: rationale, 
+      rationale, 
       txHash, 
       alreadyExists: false 
     });
 
   } catch (error: any) {
-    console.error("DEBUG_ERROR:", error); 
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("DEBUG_ERROR:", error);
+    
+    // Обработка лимитов RPC
+    const isRateLimit = error.details?.includes("rate limit") || error.message?.includes("rate limit");
+    
+    return NextResponse.json(
+      { error: isRateLimit ? "RPC limit exceeded. Please try again in 5 seconds." : error.message }, 
+      { status: isRateLimit ? 429 : 500 }
+    );
   }
 }
